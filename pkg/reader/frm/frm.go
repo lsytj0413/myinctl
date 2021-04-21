@@ -134,29 +134,6 @@ func (d *defReader) Read(r io.ReadSeeker) (*TableDefinition, error) {
 		}
 	}
 
-	// // read default values
-	// tmpKeyLength := (uint16(header[0x0f]) << 8) | uint16(header[0x02]) // 14
-	// fmt.Println("tmpKeyLength: ", tmpKeyLength)
-	// offset := ioSize + tmpKeyLength
-	// _, err = r.Seek(int64(offset+1), 0)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// recLength := (uint16(header[0x11]) << 8) | uint16(header[0x10]) // 16
-	// fmt.Println("recLength: ", recLength)
-	// recData := make([]byte, recLength)
-	// n, err = r.Read(recData)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if n != int(recLength) {
-	// 	return nil, fmt.Errorf("wrong rec read")
-	// }
-	// fmt.Println(string(recData))
-
-	// read column
-
 	// // read column
 	recordOffset := int32(frmFileHeader.IOSize) + int32(frmFileHeader.TmpKeyLength) + int32(frmFileHeader.RecLength)
 	columnOffset := ((recordOffset)/int32(frmFileHeader.IOSize)+1)*int32(frmFileHeader.IOSize) + 256 // plus 256, because it will be 256 + fixed 2 bytes(value 01)
@@ -346,6 +323,9 @@ func (d *defReader) Read(r io.ReadSeeker) (*TableDefinition, error) {
 		}
 		engineLen := int(engineLenData[1])<<8 | int(engineLenData[0])
 		engineStr, err := Readn(r, engineLen)
+		if err != nil {
+			return nil, err
+		}
 		fmt.Println("engine: ", string(engineStr))
 
 		var partLen uint32
