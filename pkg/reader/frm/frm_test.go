@@ -9,5 +9,5 @@ import (
 
 func Test(t *testing.T) {
 	r := NewReader()
-	fmt.Println(r.ReadFile(helper.JoinWithProjectAbsPath("./test/user_accounts.frm")))
+	fmt.Println(r.ReadFile(helper.JoinWithProjectAbsPath("./test/all_types.frm")))
 }

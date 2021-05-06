@@ -76,7 +76,7 @@ type FrmFileHeader struct {
 	// RowType is the row types.
 	RowType uint8 // 0x28
 
-	// TableCharsetHighByte is the
+	// TableCharsetHighByte is the high byte of charset
 	TableCharsetHighByte uint8 // 0x29
 
 	// StatsSamplePages is the pages.
@@ -113,7 +113,7 @@ type FrmFileHeader struct {
 
 	// Unknown9 defines the unknown field.
 	// NOTE: padding
-	_ [4096 - 64]byte // 0x40
+	// _ [4096 - 64]byte // 0x40
 }
 
 // FrmKeyInfoSectionHeader defines the frm file key information section header.
@@ -186,7 +186,7 @@ type KeyParts struct {
 // ColumnMetadata defines the metadata of column.
 type ColumnMetadata struct {
 	// MagicNumber is the fixed number defined as .frm column metadata section.
-	// Value: 0x01
+	// Value: 0x03
 	MagicNumber uint16 // 0x00
 
 	// NumberOfColumn is the count of column.

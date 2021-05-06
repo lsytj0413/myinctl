@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/lsytj0413/myinctl/pkg/helper"
 	"github.com/lsytj0413/myinctl/pkg/reader/frm/internal"
 )
 
@@ -39,13 +40,13 @@ func Read1(r io.Reader) (byte, error) {
 
 func (d *defReader) Read(r io.ReadSeeker) (*TableDefinition, error) {
 	frmFileHeader := &internal.FrmFileHeader{}
-	err := binary.Read(r, binary.LittleEndian, frmFileHeader)
+	err := helper.ReadObject(r, frmFileHeader)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "Read FrmFileHeader failed")
 	}
 
-	if frmFileHeader.MagicNumber != uint16(0x01FE) {
-		return nil, errors.Errorf("Read frm file header failed, wrong magic number: %v", frmFileHeader.MagicNumber)
+	if frmFileHeader.MagicNumber != uint16(FileTypeMagicNumber) {
+		return nil, errors.Errorf("File format check failed, wrong magic number: %v", frmFileHeader.MagicNumber)
 	}
 
 	_, err = r.Seek(int64(frmFileHeader.IOSize), 0)
@@ -88,49 +89,53 @@ func (d *defReader) Read(r io.ReadSeeker) (*TableDefinition, error) {
 
 	// read key names
 	{
-		terminator, err := Read1(r)
-		if err != nil {
-			return nil, err
-		}
+		if keys > 0 {
+			terminator, err := Read1(r)
+			if err != nil {
+				return nil, err
+			}
 
-		for i := 0; i < keys; i++ {
-			keyName := ""
-			for {
-				b, err := Read1(r)
-				if err != nil {
-					return nil, err
+			for i := 0; i < keys; i++ {
+				keyName := ""
+				for {
+					b, err := Read1(r)
+					if err != nil {
+						return nil, err
+					}
+					if b == terminator {
+						fmt.Println("index: ", i, "  Name: ", keyName)
+						break
+					}
+					keyName += string(b)
 				}
-				if b == terminator {
-					fmt.Println("index: ", i, "  Name: ", keyName)
-					break
-				}
-				keyName += string(b)
 			}
 		}
 	}
 
 	// read key comment
 	{
-		// Skip 2 bytes
-		_, err = Readn(r, 1)
-		if err != nil {
-			return nil, err
-		}
-
-		for i := 0; i < keys; i++ {
-			// if flags & HA_USES_COMMENT
-			data, err := Readn(r, 2)
+		if keys > 0 {
+			// Skip 2 bytes
+			_, err = Readn(r, 1)
 			if err != nil {
 				return nil, err
 			}
 
-			length := uint16(data[1])<<8 | uint16(data[0])
-			fmt.Println("index: ", i, "  CommentLength: ", length)
-			data, err = Readn(r, int(length))
-			if err != nil {
-				return nil, err
+			for i := 0; i < keys; i++ {
+				// if flags & HA_USES_COMMENT
+				data, err := Readn(r, 2)
+				if err != nil {
+					return nil, err
+				}
+
+				length := uint16(data[1])<<8 | uint16(data[0])
+				fmt.Println("index: ", i, "  CommentLength: ", length)
+				data, err = Readn(r, int(length))
+				if err != nil {
+					return nil, err
+				}
+				fmt.Println("index: ", i, "  Comment: ", string(data))
 			}
-			fmt.Println("index: ", i, "  Comment: ", string(data))
 		}
 	}
 
@@ -151,15 +156,40 @@ func (d *defReader) Read(r io.ReadSeeker) (*TableDefinition, error) {
 	fmt.Printf("%+v\n", columnMeta)
 
 	// skip 52 bytes
-	_, err = Readn(r, 52)
+	data, err := Readn(r, 52)
 	if err != nil {
 		return nil, err
 	}
+	columnPerScreen := int(data[5])
+	fmt.Println("columnPerScreen: ", columnPerScreen)
 
 	columnNameLength := 0
 	// read column names
 	{
+		columnInScreen := 0
 		for i := 0; i < int(columnMeta.NumberOfColumn); i++ {
+			if columnInScreen == columnPerScreen {
+				columnInScreen = 1
+				_, err = Readn(r, 8)
+				if err != nil {
+					return nil, err
+				}
+
+				val := byte('\x20')
+				for val == '\x20' {
+					val, err = Read1(r)
+					if err != nil {
+						return nil, err
+					}
+				}
+				_, err = Readn(r, 2)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				columnInScreen++
+			}
+
 			n, err := Read1(r)
 			if err != nil {
 				return nil, err

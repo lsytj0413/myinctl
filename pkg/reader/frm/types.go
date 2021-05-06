@@ -4,6 +4,43 @@ import (
 	"io"
 )
 
+// nolint
+// FrmFileHeader is the frm file header struct (logical).
+type FrmFileHeader struct {
+	// FrmVer is the frm version.
+	FrmVer int
+
+	DatabaseType DatabaseType
+
+	IOSize uint16
+
+	KeyLength uint16
+
+	DefaultValueLength uint16
+
+	MaxRows uint32
+	MinRows uint32
+
+	KeyInfoSectionLength uint16
+
+	CreateOptions uint16
+
+	AvgRowLength uint32
+
+	Charset int
+
+	RowType RowType
+
+	StatsSamplePages int
+	StatsAutoRecalc  int
+
+	ExtraSize uint32
+
+	DefaultPartDBType uint8
+
+	KeyBlockSize uint16
+}
+
 // https://dev.mysql.com/doc/internals/en/frm-file-format.html
 // https://github.com/mysql/mysql-server/blob/7ed30a748964c009d4909cb8b4b22036ebdef239/sql/table.cc#L7749
 // https://gist.github.com/mnpenner/92b261dc5d677fd63f694a7fa370ab50#file-frm_reader-py-L1457
@@ -14,36 +51,145 @@ type Reader interface {
 	ReadFile(file string) (*TableDefinition, error)
 }
 
+// TableDefinition is the MySQL table def.
 type TableDefinition struct {
+	// QualifiedName is the full qualified table name, such as database.table
+	QualifiedName string
+
+	// Name is the table name
+	Name string
+
+	// ColumnNames is the array of column name
+	ColumnNames []string
+
+	// Columns is the list of column definition
+	Columns []*Column
+
+	// PrimaryKey is the PRIMARY KEY information
+	PrimaryKey *KeyMeta
+
+	// SecondaryKeys is the secondary key lists
+	SecondaryKeys []*KeyMeta
+
+	// Charset is the table charset
+	Charset int
+
+	// Collation is the table charset collation
+	Collation int
 }
 
-type Header struct {
-	FrmVersion          string
-	LegacyDatabaseType  int8
-	IOSize              int16
-	Length              int32
-	TmpKeyLength        int16
-	RevLength           int16
-	MaxRows             int32
-	MinRows             int32
-	UsePackFields       int8
-	KeyInfoLength       int16
-	CreateOptions       int16
-	FrmFileVersion      string
-	AvgRowLength        int32
-	DefaultTableCharset int8
-	RowType             int8
-	KeyLength           int32
-	MysqlVersionID      int32
-	ExtraSize           int32
-	ExtraRecBufLength   int16
-	DefaultPartDBType   int8
-	KeyBlockSize        int16
+// Column is the MySQL table column def.
+// It could be read from table information_schema.columns, such as expression "SELECT * FROM information_schema.columns WHERE table_schema='db' AND table_name='tb'"
+// TABLE_CATALOG: def
+// TABLE_SCHEMA: myinctl
+//   TABLE_NAME: user_accounts
+//  COLUMN_NAME: id
+// ORDINAL_POSITION: 1
+// COLUMN_DEFAULT: NULL
+//  IS_NULLABLE: NO
+//    DATA_TYPE: bigint
+// CHARACTER_MAXIMUM_LENGTH: NULL
+// CHARACTER_OCTET_LENGTH: NULL
+// NUMERIC_PRECISION: 19
+// NUMERIC_SCALE: 0
+// DATETIME_PRECISION: NULL
+// CHARACTER_SET_NAME: NULL
+// COLLATION_NAME: NULL
+//  COLUMN_TYPE: bigint(20)
+//   COLUMN_KEY: PRI
+// 	   EXTRA: auto_increment
+//   PRIVILEGES: select,insert,update,references
+// COLUMN_COMMENT:
+// GENERATION_EXPRESSION:
+type Column struct {
+	// TableDef is the reference to table
+	TableDef *TableDefinition
+
+	// Name is the column name. It's the COLUMN_NAME value.
+	Name string
+
+	// Ordinal is the order of current column. It's the ORDINAL_POSITION value.
+	Ordinal int
+
+	// FullType is the COLUMN_TYPE of column.
+	FullType string
+
+	// DataType is the DATA_TYPE of column.
+	DataType DataType
+
+	// Nullable is the IS_NULLABLE of column.
+	Nullable bool
+
+	// IsPrimaryKey is the primary key bit of column. If the column is defined with PRIMARY KEY in column this will be true.
+	IsPrimaryKey bool
+
+	// Length is the size for integer type, MAX length for varchar and FIXED length for char type.
+	Length int
+
+	// Scale is the number of digits to the right of the decimal point, the NUMERIC_SCALE column.
+	// D in DECIMAL(M, D)
+	Scale int
+
+	// Precision is the maximum number of digits, the NUMERIC_PRECISION column.
+	// M in DECIMAL(M, D)
+	Precision int
+
+	// Charset is the CHARACTER_SET_NAME column.
+	Charset string
+
+	// Collation is the COLLATION_NAME column.
+	Collation string
+
+	// MaxBytesPerChar is the bytes of char.
+	// EX: If the charset is utf8, the value will be 3.
+	MaxBytesPerChar int
+
+	// IsVarLenChar is the charset have variable length per char.
+	// EX: If the charset is utf8mb4, CHAR will be treaded as VARCHAR and this field will be true.
+	IsVarLenChar bool
+
+	// Attributes hold the attr for ENUM & SET type.
+	Attributes map[string]interface{}
 }
 
-const (
-	MagicNumber = 0xfe01
-)
+// KeyMeta defines the key metadata information.
+// mysql> select * from information_schema.innodb_sys_indexes limit 1;
+// +----------+--------+----------+------+----------+---------+-------+-----------------+
+// | INDEX_ID | NAME   | TABLE_ID | TYPE | N_FIELDS | PAGE_NO | SPACE | MERGE_THRESHOLD |
+// +----------+--------+----------+------+----------+---------+-------+-----------------+
+// |       11 | ID_IND |       11 |    3 |        1 |     270 |     0 |              50 |
+// +----------+--------+----------+------+----------+---------+-------+-----------------+
+// See: https://dev.mysql.com/doc/refman/5.7/en/create-table.html#create-table-indexes-keys
+type KeyMeta struct {
+	// Name is the index name.
+	Name string
+
+	// Type is the index key type
+	Type KeyType
+
+	// NumberOfColumns is the key numbers
+	NumberOfColumns int
+
+	// KeyColumns is the key columns
+	KeyColumns []*Column
+
+	// KeyColumnNames is the key column names
+	KeyColumnNames []string
+
+	// KeyVarLengthColumns is the variable length key columns
+	KeyVarLengthColumns []*Column
+
+	// KeyVarLengthColumnNames is the variable length key column names
+	KeyVarLengthColumnNames []string
+
+	// KeyVarLength is the variable length of column
+	// NOTE: the length of key might be different from column definitions, EX: VARCHAR
+	KeyVarLength []int
+}
+
+// const (
+// 	MagicNumber = 0xfe01
+// )
 
 // The enum value of table category, see *enum enum_table_category*
 const (
@@ -56,53 +202,6 @@ const (
 	TableCategoryPerformance = 6
 	TableCategoryRPLInfo     = 7
 	TableCategoryGtid        = 8
-)
-
-// legacyDBType
-const (
-	DBTypeUnknown           = 0
-	DBTypeDiabIsam          = 1
-	DBTypeHash              = 2
-	DBTypeMisam             = 3
-	DBTypePisam             = 4
-	DBTypeRmsIsam           = 5
-	DBTypeHeap              = 6
-	DBTypeIsam              = 7
-	DBTypeMrgIsam           = 8
-	DBTypeMyisam            = 9
-	DBTypeMrgMyisam         = 10
-	DBTypeBerkeleyDB        = 11
-	DBTypeInnodb            = 12
-	DBTypeGemini            = 13
-	DBTypeNdbCluster        = 14
-	DBTypeExampleDB         = 15
-	DBTypeArchiveDB         = 16
-	DBTypeCsvDB             = 17
-	DBTypeFederatedDB       = 18
-	DBTypeBlackholeDB       = 19
-	DBTypePartitionDB       = 20
-	DBTypeBinlog            = 21
-	DBTypeSolid             = 22
-	DBTypePbxt              = 23
-	DBTypeTableFunction     = 24
-	DBTypeMemcache          = 25
-	DBTypeFalcon            = 26
-	DBTypeMaria             = 27
-	DBTypePerformanceSchema = 28
-	DBTypeFirstDynamic      = 42
-	DBTypeDefault           = 127
-)
-
-// rowType
-const (
-	RowTypeNotUsed    = -1
-	RowTypeDefault    = 0
-	RowTypeFixed      = 1
-	RowTypeDynamic    = 2
-	RowTypeCompressed = 3
-	RowTypeRedundant  = 4
-	RowTypeCompact    = 5
-	RowTypePage       = 6 // unused, reserved for future versions.
 )
 
 // StatsAutoRecalc
@@ -143,38 +242,4 @@ const (
 	KeyTypeVartext2   = 17 // 0-65535 bytes, length packed 2 byte
 	KeyTypeVarbinary2 = 18
 	KeyTypeBit        = 19
-)
-
-// filed Type
-const (
-	TypeDecimal    = 0
-	TypeTiny       = 1
-	TypeShort      = 2
-	TypeLong       = 3
-	TypeFloat      = 4
-	TypeDouble     = 5
-	TypeNull       = 6
-	TypeTimestamp  = 7
-	TypeLongLong   = 8
-	TypeInt24      = 9
-	TypeData       = 10
-	TypeTime       = 11
-	TypeDatatime   = 12
-	TypeYear       = 13
-	TypeNewDate    = 14
-	TypeVarchar    = 15
-	TypeBit        = 16
-	TypeTimestamp2 = 17
-	TypeTime2      = 18
-	TypeJSON       = 245
-	TypeNewDecimal = 246
-	TypeEnum       = 247
-	TypeSet        = 248
-	TypeTinyBlob   = 249
-	TypeMediumBlob = 250
-	TypeLongBlob   = 251
-	TypeBlob       = 252
-	TypeVarString  = 253
-	TypeString     = 254
-	TypeGeometry   = 255
 )

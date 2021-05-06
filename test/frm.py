@@ -953,6 +953,7 @@ class FrmReader(object):
             'com_length': data[8],
             'null_fields': data[12],
         }
+        pprint(self.col_metadata)
         if self.verbosity > 1:
             pprint(self.col_metadata)
 
@@ -960,11 +961,13 @@ class FrmReader(object):
         try:
             self.frm_file.read(7)
             fields_per_screen = struct.unpack("<B", self.frm_file.read(1))[0]
+            pprint(fields_per_screen)
             if self.verbosity > 1:
                 print "# Fields per screen =", fields_per_screen
             self.frm_file.read(46)
             col_names = self._read_column_names(fields_per_screen)[1]
             self.frm_file.read(1)  # skip 1 byte
+            pprint(col_names)
             self.column_data = self._read_column_metadata()
         except Exception, error:
             if self.verbosity > 1:
@@ -1612,4 +1615,4 @@ class FrmReader(object):
 
 
 if __name__ == "__main__":
-    FrmReader("", "", "./user_accounts.frm", {}).show_create_table_statement()
+    FrmReader("", "", "./all_types.frm", {}).show_create_table_statement()
